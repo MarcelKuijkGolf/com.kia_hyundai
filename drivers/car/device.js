@@ -23,6 +23,7 @@ const Homey = require('homey');
 const util = require('util');
 const { createClient, exceptions, constants } = require('../../lib/connect');
 const { buildVehicleDebugDump } = require('../../lib/connect/native/debugDump');
+const { getRequestStats } = require('../../lib/connect/native/http');
 const {
   ccs2ReservationTimeOrNone, legacyReservationTimeOrNone, ccs2DepartureDays, nextDepartureOccurrence,
 } = require('../../lib/connect/native/utils');
@@ -749,6 +750,15 @@ class CarDevice extends Homey.Device {
       const fullStatus = refresh
         ? await this.client.forceRefreshVehicleState(this.vehicleConfig)
         : await this.client.updateVehicleWithCachedState(this.vehicleConfig);
+      // Verzoekenteller: bij elke geforceerde vernieuwing de dagtotalen in het log.
+      if (refresh) {
+        const stats = getRequestStats();
+        // CCS2 vernieuwen = trigger op .../carstatus (zonder /latest)
+        const triggers = Object.entries(stats.byPath)
+          .filter(([key]) => /\/carstatus$/.test(key))
+          .reduce((sum, [, n]) => sum + n, 0);
+        this.log(`Verzoeken vandaag (${stats.day}): ${stats.total}, vernieuwingen: ${triggers}`);
+      }
       // The call above can outlive the device (deletion, app unload); anything
       // below writes capabilities, the store or flow triggers.
       if (this.destroyed) return;
